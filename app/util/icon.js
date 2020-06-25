@@ -1,12 +1,17 @@
 import { getHost } from './browser';
 import { DOMParser } from 'react-native-html-parser';
+import cache from './cache';
+
+const FAVICONKIT_URI = 'https://api.faviconkit.com/';
+const FACICON_SIZE = 256;
+const PROTOCOL = '://';
+
+let HOST;
 
 /**
  * Get and parse HTML
  */
 const getDocument = async url => {
-	// const { url } = this.props;
-
 	const response = await fetch(url);
 	const html = await response.text();
 
@@ -29,17 +34,13 @@ const parseSize = sizes => {
  * Format href (needed because assets can be relative or absolute)
  */
 const formatHref = (bestIcon, url) => {
-	// const { url } = this.props;
 	const href = bestIcon.getAttribute('href') || '';
-
-	const PROTOCOL = '://';
 
 	const hrefLength = href.indexOf(PROTOCOL);
 	const protocolLength = url.indexOf(PROTOCOL);
 	const protocol = url.substr(0, protocolLength);
-	const host = getHost(url);
 
-	return hrefLength === -1 ? `${protocol}${PROTOCOL}${host}${href}` : href;
+	return hrefLength === -1 ? `${protocol}${PROTOCOL}${HOST}${href}` : href;
 };
 
 /**
@@ -55,7 +56,13 @@ const findBestIcon = (acc, curr) => {
  * Attempt to fetch icon from document and fall back to faviconkit if we have to
  */
 export default async url => {
-	// const { url } = this.props;
+	HOST = getHost(url);
+	const fallback = `${FAVICONKIT_URI}${HOST}/${FACICON_SIZE}`;
+
+	const peek = await cache.peek(url);
+
+	if (peek) return peek;
+
 	const doc = await getDocument(url);
 
 	// get all <link> tags
@@ -79,8 +86,10 @@ export default async url => {
 	// !bestIcon && console.log('no best icon ;(');
 
 	// fall back to faviconkit if we absolutely have to (meaning there's only a .ico resource)
-	const fallback = `https://api.faviconkit.com/${getHost(url)}/64`;
 	const uri = bestIcon ? formatHref(bestIcon, url) : fallback;
+
+	// we might want to save this using some schema?
+	cache.set(url, uri);
 
 	return uri;
 };
